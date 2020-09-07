@@ -1,0 +1,6 @@
+build
+testbuild
+generated_wav
+doxy
+*.swp
+*~
