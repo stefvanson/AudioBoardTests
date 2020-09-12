@@ -18,9 +18,6 @@ TOOLSPATH = $(ARDUINOPATH)/hardware/tools/
 COREDIRNAME  = teensy4
 COREPATH     = lib/teensy/$(COREDIRNAME)
 
-# path location for Arduino libraries
-LIBRARYPATH = libraries
-
 # path location for the arm-none-eabi compiler
 COMPILERPATH = $(TOOLSPATH)/arm/bin/
 
@@ -41,7 +38,7 @@ CXXFLAGS = -std=gnu++14 -felide-constructors -fno-exceptions -fpermissive -fno-r
 # linker options
 CPPFLAGS = -Wall -O2 -ffunction-sections -fdata-sections
 CPPFLAGS += $(CPUOPTIONS)
-CPPFLAGS += -I$(COREPATH)
+CPPFLAGS += -I$(COREPATH) -Ilib
 CPPFLAGS += -DF_CPU=600000000 -DUSB_SERIAL -DLAYOUT_US_ENGLISH -DUSING_MAKEFILE -DCUSTOM_TEENSY_MAIN_CPP
 CPPFLAGS += -D__IMXRT1062__ -DARDUINO=10810 -DTEENSYDUINO=149 -DARDUINO_TEENSY40
 
@@ -61,8 +58,6 @@ C_FILES := $(shell find src -name '*.c')
 CPP_FILES := $(shell find src -name '*.cpp')
 
 # include paths for libraries
-L_INC := $(foreach lib,$(filter %/, $(wildcard $(LIBRARYPATH)/*/)), -I$(lib))
-
 SOURCES := $(C_FILES:.c=.o) $(CPP_FILES:.cpp=.o) $(TC_FILES:%.c=%.o) $(TCPP_FILES:%.cpp=%.o)
 OBJS := $(foreach src, $(SOURCES), $(BUILDDIR)/$(src))
 
@@ -83,18 +78,6 @@ upload: post_compile reboot
 #####################################################
 #				Building for teensy
 #####################################################
-
-# Compiling the lib/teensy/teensy4 files
-
-$(BUILDDIR)/$(COREDIRNAME)/%.o: $(COREPATH)/%.c
-	@echo "[CC]  $<"
-	@mkdir -p "$(dir $@))"
-	@$(CC) $(CPPFLAGS) $(CFLAGS) $(L_INC) -o $@ -c "$<"
-
-$(BUILDDIR)/$(COREDIRNAME)/%.o: $(COREPATH)/%.cpp
-	@echo "[CXX] $<"
-	@mkdir -p "$(dir $@)"
-	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(L_INC) -o $@ -c "$<"
 
 # Compiling the project specific source files
 
@@ -127,7 +110,7 @@ $(BUILDDIR)/$(TARGET).elf: $(OBJS) $(LDSCRIPT)
 #####################################################
 
 clean:
-	rm -rf $(BUILDDIR)/src
+	rm -rf $(BUILDDIR)/src $(BUILDDIR)/lib/audio
 
 clean_all:
 	rm -rf $(BUILDDIR)
