@@ -28,6 +28,8 @@
  * SOFTWARE.
  */
 
+#include <math.h>
+
 #include <Arduino.h>
 #include "teensy_audio/imxrt_hw.h"
 
@@ -75,17 +77,17 @@ void config_i2s(void) {
   I2S1_TCR2 = I2S_TCR2_SYNC(tsync) | I2S_TCR2_BCP
         | (I2S_TCR2_BCD | I2S_TCR2_DIV((1)) | I2S_TCR2_MSEL(1));
   I2S1_TCR3 = I2S_TCR3_TCE;
-  I2S1_TCR4 = I2S_TCR4_FRSZ((2-1)) | I2S_TCR4_SYWD((24-1)) | I2S_TCR4_MF
+  I2S1_TCR4 = I2S_TCR4_FRSZ((2-1)) | I2S_TCR4_SYWD((32-1)) | I2S_TCR4_MF
         | I2S_TCR4_FSD | I2S_TCR4_FSE | I2S_TCR4_FSP;
-  I2S1_TCR5 = I2S_TCR5_WNW((24-1)) | I2S_TCR5_W0W((24-1)) | I2S_TCR5_FBT((24-1));
+  I2S1_TCR5 = I2S_TCR5_WNW((32-1)) | I2S_TCR5_W0W((32-1)) | I2S_TCR5_FBT((32-1));
 
   I2S1_RMR = 0;
   I2S1_RCR1 = I2S_RCR1_RFW(1);  // FIFO request flag if > 1 entries in FIFO
   I2S1_RCR2 = I2S_RCR2_SYNC(rsync) | I2S_RCR2_BCP | (I2S_RCR2_BCD | I2S_RCR2_DIV((1)) | I2S_RCR2_MSEL(1)); // | I2S_RCR2_BCP
   I2S1_RCR3 = I2S_RCR3_RCE;
-  I2S1_RCR4 = I2S_RCR4_FRSZ((2-1)) | I2S_RCR4_SYWD((24-1)) | I2S_RCR4_MF
+  I2S1_RCR4 = I2S_RCR4_FRSZ((2-1)) | I2S_RCR4_SYWD((32-1)) | I2S_RCR4_MF
         | I2S_RCR4_FSE | I2S_RCR4_FSP | I2S_RCR4_FSD;
-  I2S1_RCR5 = I2S_RCR5_WNW((24-1)) | I2S_RCR5_W0W((24-1)) | I2S_RCR5_FBT((24-1));
+  I2S1_RCR5 = I2S_RCR5_WNW((32-1)) | I2S_RCR5_W0W((32-1)) | I2S_RCR5_FBT((32-1));
 
   CORE_PIN7_CONFIG  = 3;  //1:TX_DATA0
   CORE_PIN8_CONFIG  = 3;  //1:RX_DATA0
@@ -97,7 +99,7 @@ void i2s_start() {
   I2S1_TCSR = I2S_TCSR_TE | I2S_TCSR_BCE;  // Enable transmitter
 }
 
-bool i2s_write(uint32_t value_left, uint32_t value_right) {
+bool i2s_write(int32_t value_left, int32_t value_right) {
   if (I2S1_TCSR & I2S_TCSR_FRF) {
     I2S1_TDR0 = value_left;
     I2S1_TDR0 = value_right;
@@ -117,74 +119,41 @@ bool i2s_read(uint32_t* value_left, uint32_t* value_right) {
   }
 }
 
-uint32_t data[] = { 0x00000000, 0x00FFFFFF,
-                    0x00123456, 0x00789ABC,
-                    0x00555555, 0x00FFFFFF,
-                    0x00FFFFFF, 0x00555555,
-                    0x008FFFF1, 0x00FFFFFF };
+/** @brief Gets the next 24-bit I2S value that must be written.
+ *  @param[in] write_counter The current message count (can be modulo AUDIO_SAMPLE_RATE_EXACT).
+ *  @returns The next value to be written (24-bit).
+ */
+int32_t get_next_audio_value(int write_counter) {
+  float t = (float) write_counter / AUDIO_SAMPLE_RATE_EXACT;
+  float sinval = sin(440 * 2 * 3.1415 * t);
+  int32_t value = sinval * 4294967296/2;
+  return value;
+}
 
 extern "C" int main(void)
 {
-#ifdef USING_MAKEFILE
-  //auto ao = new AudioOutputI2S();
-  //begin();
-  Serial.begin(115200);
-  config_i2s();
-  i2s_write(1, 2);
-  i2s_start();
-  int i = 0;
-  while(1) {
-    uint32_t read_value_left = 0xFFFFFFFF;
-    uint32_t read_value_right = 0xFFFFFFFF;
-    i2s_write(1, 2);
-    if (i2s_read(&read_value_left, &read_value_right)) {
-      if (read_value_left != 1) {
-        Serial.print("L");
-        Serial.println(read_value_left);
-      }
-      if (read_value_right != 2) {
-        Serial.print("R");
-        Serial.println(read_value_right);
-      }
-      if (i++ > 400000) {
-        Serial.println("Done");
-        while(1);
-      }
-    }
-  }
-
-
   int write_counter = 0;
   int read_counter = 0;
 
-  while (i2s_write(data[write_counter % 4], data[(write_counter + 1) % 4])) {
-    write_counter = (write_counter + 2) % 4;
-  }
+  Serial.begin(115200);
+  config_i2s();
+
+  i2s_write(0, 0);
+  i2s_start();
 
   while(1) {
     uint32_t read_value_left = 0xFFFFFFFF;
     uint32_t read_value_right = 0xFFFFFFFF;
-    if (i2s_write(data[write_counter % 4], data[(write_counter + 1) % 4])) {
-      write_counter = (write_counter + 2) % 4;
-    }
     if (i2s_read(&read_value_left, &read_value_right)) {
-      if (read_value_left != data[read_counter++ % 4]) {
-        // TODO
+      read_counter++;
+    }
+
+    int32_t value = get_next_audio_value(write_counter);
+    if (i2s_write(value, value)) {
+      write_counter += 1;
+      if (write_counter >= 48000) {
+        write_counter = 0;
       }
-      if (read_value_right != data[read_counter++ % 4]) {
-        // TODO
-      }
-      read_counter = (read_counter + 2) % 4;
     }
   }
-
-
-#else
-  // Arduino's main() function just calls setup() and loop()....
-  setup();
-  while (1) {
-    loop();
-    yield();
-  }
-#endif
 }
