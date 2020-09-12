@@ -65,7 +65,7 @@ void config_i2s(void) {
     & ~(IOMUXC_GPR_GPR1_SAI1_MCLK1_SEL_MASK))
     | (IOMUXC_GPR_GPR1_SAI1_MCLK_DIR | IOMUXC_GPR_GPR1_SAI1_MCLK1_SEL(0));
 
-  //CORE_PIN23_CONFIG = 3;  //1:MCLK
+  CORE_PIN23_CONFIG = 3;  //1:MCLK
   CORE_PIN21_CONFIG = 3;  //1:RX_BCLK
   CORE_PIN20_CONFIG = 3;  //1:RX_SYNC
 
@@ -73,7 +73,7 @@ void config_i2s(void) {
   int tsync = 1;
 
   I2S1_TMR = 0;
-  I2S1_TCR1 = I2S_TCR1_RFW(1);
+  I2S1_TCR1 = I2S_TCR1_RFW(30);
   I2S1_TCR2 = I2S_TCR2_SYNC(tsync) | I2S_TCR2_BCP
         | (I2S_TCR2_BCD | I2S_TCR2_DIV((1)) | I2S_TCR2_MSEL(1));
   I2S1_TCR3 = I2S_TCR3_TCE;
@@ -109,7 +109,7 @@ bool i2s_write(int32_t value_left, int32_t value_right) {
   }
 }
 
-bool i2s_read(uint32_t* value_left, uint32_t* value_right) {
+bool i2s_read(int32_t* value_left, int32_t* value_right) {
   if (I2S1_RCSR & I2S_RCSR_FRF) {
     *value_left = I2S1_RDR0;
     *value_right = I2S1_RDR0;
@@ -119,7 +119,8 @@ bool i2s_read(uint32_t* value_left, uint32_t* value_right) {
   }
 }
 
-/** @brief Gets the next 24-bit I2S value that must be written.
+/** @brief Gets the next 24-bit I2S value that must be written for creating a
+ *    440Hz sine wave.
  *  @param[in] write_counter The current message count (can be modulo AUDIO_SAMPLE_RATE_EXACT).
  *  @returns The next value to be written (24-bit).
  */
@@ -132,27 +133,35 @@ int32_t get_next_audio_value(int write_counter) {
 
 extern "C" int main(void)
 {
+  bool input_to_output = true;
   int write_counter = 0;
-  int read_counter = 0;
 
   Serial.begin(115200);
   config_i2s();
 
-  i2s_write(0, 0);
+  int i = 0;
+  while(i2s_write(0, 0)){i++;}
   i2s_start();
 
+  int32_t read_value_left = 0;
+  int32_t read_value_right = 0;
   while(1) {
-    uint32_t read_value_left = 0xFFFFFFFF;
-    uint32_t read_value_right = 0xFFFFFFFF;
-    if (i2s_read(&read_value_left, &read_value_right)) {
-      read_counter++;
-    }
+    if (input_to_output) {
+      if (i2s_read(&read_value_left, &read_value_right)) {
 
-    int32_t value = get_next_audio_value(write_counter);
-    if (i2s_write(value, value)) {
-      write_counter += 1;
-      if (write_counter >= 48000) {
-        write_counter = 0;
+      }
+      i2s_write(read_value_left, read_value_right);
+    } else {
+      // I2S read to avoid errors due to buffer overflow
+      int32_t not_used;
+      i2s_read(&not_used, &not_used);
+
+      int32_t sine_value = get_next_audio_value(write_counter);
+      if (i2s_write(sine_value, sine_value)) {
+        write_counter += 1;
+        if (write_counter >= 48000) {
+          write_counter = 0;
+        }
       }
     }
   }
