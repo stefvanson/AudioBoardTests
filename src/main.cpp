@@ -137,6 +137,8 @@ extern "C" int main(void)
   int write_counter = 0;
 
   Serial.begin(115200);
+  Serial1.begin(31250);
+
   config_i2s();
 
   int i = 0;
@@ -146,6 +148,22 @@ extern "C" int main(void)
   int32_t read_value_left = 0;
   int32_t read_value_right = 0;
   while(1) {
+    // Check input on MIDI in and write to MIDI out
+    if (Serial1.available() > 0) {
+      uint8_t received_byte = Serial1.read();
+      Serial.print("rcv: ");
+      Serial.println(received_byte, DEC);
+      Serial1.write(received_byte);
+    }
+    // Check input on USB and write 0x900000 to MIDI out
+    if (Serial.available() > 0) {
+      uint8_t received_byte = Serial.read();
+      Serial.print("rcv2: ");
+      Serial.println(received_byte, DEC);
+      Serial1.write(0x90);
+      Serial1.write(0x00);
+      Serial1.write(0x00);
+    }
     if (input_to_output) {
       if (i2s_read(&read_value_left, &read_value_right)) {
 
