@@ -131,13 +131,34 @@ int32_t get_next_audio_value(int write_counter) {
   return value;
 }
 
+
+// extern "C" int main(void)
+// {
+//   Serial.begin(9600);
+//   Serial1.begin(9600);
+//   Serial4.begin(9600);
+//   while(1) {
+//     int incomingByte;
+//
+//     if (Serial.available() > 0) {
+//       incomingByte = Serial.read();
+//       Serial.print("USB received: ");
+//       Serial.println(incomingByte, DEC);
+//       Serial1.print("USB received:");
+//       Serial4.println(incomingByte, DEC);
+//     }
+//   }
+// }
+
+
 extern "C" int main(void)
 {
   bool input_to_output = true;
   int write_counter = 0;
 
-  Serial.begin(115200);
+  Serial.begin(31250);
   Serial1.begin(31250);
+  Serial4.begin(31250);
 
   config_i2s();
 
@@ -152,17 +173,17 @@ extern "C" int main(void)
     if (Serial1.available() > 0) {
       uint8_t received_byte = Serial1.read();
       Serial.print("rcv: ");
-      Serial.println(received_byte, DEC);
+      Serial.println(received_byte, HEX);
       Serial1.write(received_byte);
+      Serial4.write(received_byte);
     }
     // Check input on USB and write 0x900000 to MIDI out
     if (Serial.available() > 0) {
       uint8_t received_byte = Serial.read();
       Serial.print("rcv2: ");
       Serial.println(received_byte, DEC);
-      Serial1.write(0x90);
-      Serial1.write(0x00);
-      Serial1.write(0x00);
+      Serial1.write(received_byte);
+      Serial4.write(received_byte);
     }
     if (input_to_output) {
       if (i2s_read(&read_value_left, &read_value_right)) {
